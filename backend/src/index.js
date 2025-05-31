@@ -5,7 +5,6 @@ const messageRoutes = require('./Routes/Message.router')
 const cors = require("cors")
 const path = require("path");
 
-const __dirname = path.resolve();
 
 const cookieParser = require("cookie-parser")
 
@@ -21,7 +20,7 @@ app.use(cors({
 app.use("/api/auth",route);
 app.use("/api/messages",messageRoutes);
 
-app.use(express.static(path.join(__dirname,"../frontend/dist")));
+app.use(express.static(path.join(__dirname, "../frontend/dist")));
 app.get("*", (req,resp) =>{
   resp.sendFile(path.join(__dirname, "../frontend","dist","index.html"))
 })
