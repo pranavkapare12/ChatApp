@@ -1,141 +1,158 @@
 const User = require("../database/Users");
 const bcrypt = require("bcrypt");
-const generateTokan = require("../lib/utils");
+const jwt = require("jsonwebtoken");
 const cloudinary = require("../lib/cloudinary");
 
+// Helper function to generate JWT token and set cookie
+const generateToken = (userId, res) => {
+  const token = jwt.sign({ userId }, "TheSecreateKey", {
+    expiresIn: "7d", // token expiration
+  });
+
+  // Set token in HTTP-only cookie
+  res.cookie("jwt", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production", // set secure flag in production
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  });
+
+  return token;
+};
+
 const signup = async (req, res) => {
-  //  console.log(req.body);
   try {
     const { name, email, pass, pro } = req.body;
 
-    console.log(name, email, pass);
-    if (name === null || email === null || pass === null) {
-      return res.status(400).json({ message: "All fileds Require" });
+    if (!name || !email || !pass) {
+      return res.status(400).json({ message: "All fields are required" });
     }
-
-    const salt = 10;
 
     if (pass.length < 6) {
       return res
         .status(400)
-        .json({ message: "Password must be at least 6 character" });
+        .json({ message: "Password must be at least 6 characters" });
     }
 
-    const user = await User.findOne({ email });
-
-    if (user) {
-      return res.status(400).json({ message: "Email already Exist" });
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "Email already exists" });
     }
 
-    const password = await bcrypt.hash(pass, salt);
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(pass, saltRounds);
 
-    const ack = new User({
+    const newUser = new User({
       name,
       email,
-      password,
-      profilePic: pro,
+      password: hashedPassword,
+      profilePic: pro || "", // Optional profile picture
     });
 
-    await ack.save();
+    await newUser.save();
 
-    const id = await User.findOne({ password });
-    // return res.json(id._id);
+    generateToken(newUser._id, res);
 
-    generateTokan(id._id, res);
-    res.status(201).json({
-      message: "NEW USER CREATED",
+    return res.status(201).json({
+      message: "New user created successfully",
+      user: {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        profilePic: newUser.profilePic,
+      },
     });
-  } catch (e) {
-    res.send({
-      message: `Cannot insert Data ${e}`,
-    });
+  } catch (error) {
+    return res.status(500).json({ message: `Signup failed: ${error.message}` });
   }
 };
 
 const login = async (req, res) => {
   try {
     const { email, pass } = req.body;
-    if (email === null || pass === null) {
-      return res.status(400).json({ message: "All fileds Require" });
+
+    if (!email || !pass) {
+      return res.status(400).json({ message: "All fields are required" });
     }
 
-    const salt = 10;
-
     const user = await User.findOne({ email });
-
     if (!user) {
-      return res.status(400).json({ message: "Invalid Credintaile" + email });
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
     const isMatch = await bcrypt.compare(pass, user.password);
-    const id = user._id;
-    if (isMatch) {
-      generateTokan(id._id, res);
-      res.send("LoginIn Successfully ");
-    } else {
-      res.send({
-        message: `Invalid Credintaile`,
-      });
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
     }
-  } catch (e) {
-    res.send({
-      message: `Cannot insert Data ${e}`,
+
+    generateToken(user._id, res);
+
+    return res.status(200).json({
+      message: "Logged in successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        profilePic: user.profilePic,
+      },
     });
+  } catch (error) {
+    return res.status(500).json({ message: `Login failed: ${error.message}` });
   }
 };
 
-const logout = async (req, res) => {
+const logout = (req, res) => {
   try {
-    res.clearCookie("jwt");
-    res.send("logout");
-  } catch (e) {
-    res.send({
-      message: `Cannot insert Data ${e}`,
+    res.clearCookie("jwt", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
     });
+    return res.status(200).json({ message: "Logged out successfully" });
+  } catch (error) {
+    return res.status(500).json({ message: `Logout failed: ${error.message}` });
   }
 };
 
-const updateProfile = async (req, resp) => {
+const updateProfile = async (req, res) => {
   try {
-    // check pro if is not correct replace with req.body
     const profilePic = req.body.pro;
     const userId = req.user._id;
 
-    // console.log("Execute from auth Crontroller");
-    // console.log("Profile Pic: ", profilePic);
-
-    const uploadResponse = await cloudinary.uploader.upload(profilePic);
-
-    const updateUser = await User.findByIdAndUpdate(
-      userId,
-      {
-        profilePic: uploadResponse.secure_url,
-      },
-      {
-        new: true,
-      }
-    );
-
-    if (!updateUser) {
-      return resp.status(404).json({ message: "User not found" });
+    if (!profilePic) {
+      return res.status(400).json({ message: "Profile picture is required" });
     }
 
-    // console.log("User updated successfully");
-    return resp.status(200).json({
-      message: "User updated successfully",
-      user: updateUser,
+    // Upload to Cloudinary
+    const uploadResponse = await cloudinary.uploader.upload(profilePic);
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { profilePic: uploadResponse.secure_url },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({
+      message: "Profile updated successfully",
+      user: updatedUser,
     });
-  } catch (e) {
-    resp.send(e);
+  } catch (error) {
+    return res.status(500).json({ message: `Update failed: ${error.message}` });
   }
 };
 
-const checkAuth = (req, resp) => {
+const checkAuth = (req, res) => {
   try {
-    return resp.status(200).json(req.user);
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    return res.status(200).json(req.user);
   } catch (error) {
-    console.log("Error in checkAuth controller", error.message);
-    return resp.status(500).json({ message: "Internal Server Error" });
+    return res.status(500).json({ message: `Error checking auth: ${error.message}` });
   }
 };
 
