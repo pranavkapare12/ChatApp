@@ -18,7 +18,7 @@ app.use(cors({
 
 
 app.use("/api/auth",route);
-app.use("/api/messages",messageRoutes);
+// app.use("/api/messages",messageRoutes);
 
 app.use(express.static(path.join(__dirname, "../frontend/dist")));
 app.get("*", (req,resp) =>{
