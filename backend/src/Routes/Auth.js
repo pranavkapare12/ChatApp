@@ -1,52 +1,56 @@
 const User = require("../database/Users");
 const bcrypt = require("bcrypt");
-const generateTokan = require("../lib/utils");  // your JWT token generator
 
 const signup = async (req, res) => {
   try {
-    let { name, email, pass, pro } = req.body;
+    const { name, email, pass, pro } = req.body;
 
-    if (!name || !email || !pass) {
-      return res.status(400).json({ message: "All fields required" });
+    if (name === null || email === null || pass === null) {
+      return res.status(400).json({ message: "All fileds Require" });
     }
 
     if (!pro) {
       pro = "Hello From the user";
     }
 
+    const salt = 10;
+
     if (pass.length < 6) {
       return res
         .status(400)
-        .json({ message: "Password must be at least 6 characters" });
+        .json({ message: "Password must be at least 6 character" });
     }
 
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: "Email already exists" });
+    const user = await User.findOne({ email });
+
+    if (user) {
+      return res.status(400).json({ message: "Email already Exist" });
     }
 
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(pass, saltRounds);
+    const password = await bcrypt.hash(pass, salt);
 
-    const newUser = new User({
+    const ack = new User({
       name,
       email,
-      password: hashedPassword,
+      password,
       profilePic: pro,
     });
 
-    await newUser.save();
+    ack.save();
 
-    // Use your generateTokan util to create a JWT and set cookie
-    generateTokan(newUser._id, res);
+    const id = await User.findOne({ password });
 
-    res.status(201).json({
-      message: "New user created",
-      userId: newUser._id,
+    res.cookie("jwt",id._id, {
+      httpOnly: true,
+      secure: false, // set to true if using HTTPS
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    });
+    res.send({
+      message: `${id._id}`,
     });
   } catch (e) {
-    res.status(500).json({
-      message: `Cannot insert data: ${e.message}`,
+    res.send({
+      message: `Cannot insert Data ${e}`,
     });
   }
 };
@@ -54,30 +58,38 @@ const signup = async (req, res) => {
 const login = async (req, res) => {
   try {
     const { email, pass } = req.body;
-
-    if (!email || !pass) {
-      return res.status(400).json({ message: "All fields required" });
+    if (email === null || pass === null) {
+      return res.status(400).json({ message: "All fileds Require" });
     }
 
+    const salt = 10;
+
     const user = await User.findOne({ email });
+
     if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: "Invalid Credintaile" + email });
     }
 
     const isMatch = await bcrypt.compare(pass, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    const id = user._id;
+    if (isMatch) {
+      res.cookie("jwt",user._id, {
+        httpOnly: true,
+        secure: false, // set to true if using HTTPS
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      });
+      res.send({
+        message: `${user._id}`,
+      });
+      res.send("LoginIn Successfully ");
+    } else {
+      res.send({
+        message: `Invalid Credintaile`,
+      });
     }
-
-    generateTokan(user._id, res);
-
-    res.status(200).json({
-      message: "Logged in successfully",
-      userId: user._id,
-    });
   } catch (e) {
-    res.status(500).json({
-      message: `Cannot login: ${e.message}`,
+    res.send({
+      message: `Cannot insert Data ${e}`,
     });
   }
 };
@@ -85,10 +97,10 @@ const login = async (req, res) => {
 const logout = async (req, res) => {
   try {
     res.clearCookie("jwt");
-    res.status(200).send("Logged out");
+    res.send("logout");
   } catch (e) {
-    res.status(500).json({
-      message: `Cannot logout: ${e.message}`,
+    res.send({
+      message: `Cannot insert Data ${e}`,
     });
   }
 };

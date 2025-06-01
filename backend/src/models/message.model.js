@@ -3,13 +3,13 @@ const connection = require("../database/Connection");
 const messageSchema = new connection.Schema(
   {
     senderId: {
-      type: connection.Schema.Types.ObjectId,
-      ref: "users", // The collection name, should be consistent with your user model
+      type: connection.Types.ObjectId,
+      ref: "User",
       required: true,
     },
     receiverId: {
-      type: connection.Schema.Types.ObjectId,
-      ref: "users",
+      type: connection.Types.ObjectId,
+      ref: "User",
       required: true,
     },
     text: {
@@ -22,6 +22,6 @@ const messageSchema = new connection.Schema(
   { timestamps: true }
 );
 
-const Message = connection.model("message", messageSchema, "message");
+const Message = connection.model("Message",messageSchema,"message");
 
 module.exports = Message;

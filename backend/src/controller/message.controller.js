@@ -1,67 +1,79 @@
-const User = require('../database/Users');
-const Message = require("../models/message.model");
-const cloudinary = require("../lib/cloudinary");
+const User = require('../database/Users')
+const Message = require("../models/message.model")
+const cloudinary = require("../lib/cloudinary")
 const { getReciverSocketId, io } = require("../lib/socket");
 
-const getUserForSidebar = async (req, res) => {
-  try {
-    const loggedInUserId = req.user._id;
-    const users = await User.find({ _id: { $ne: loggedInUserId } }).select("-password");
-    return res.status(200).json(users);
-  } catch (error) {
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
-};
 
-const getMessages = async (req, res) => {
-  try {
-    const { id: userToChatId } = req.params;
-    const myId = req.user._id;
+const getUserForSidebar = async (req,resp) =>{
 
-    const messages = await Message.find({
-      $or: [
-        { senderId: myId, receiverId: userToChatId },
-        { senderId: userToChatId, receiverId: myId },
-      ],
-    });
+    try{
+        const loggedInUserId = req.user._id;
+        const filteredUsers = await User.find({_id : {$ne : loggedInUserId}}).select("-password")
+        // resp.send(filteredUsers)
 
-    return res.status(200).json(messages);
-  } catch (error) {
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
-};
+        resp.status(200).json(filteredUsers);
 
-const sendMessage = async (req, res) => {
-  try {
-    const { text, image } = req.body;
-    const { id: receiverId } = req.params;
-    const senderId = req.user._id;
+    }catch(e){
+        resp.send(500).json({ error: "Internal Server error"})
 
-    let imageUrl = null;
-    if (image) {
-      const uploadResponse = await cloudinary.uploader.upload(image);
-      imageUrl = uploadResponse.secure_url;
     }
+}
 
-    const newMessage = new Message({
-      senderId,
-      receiverId,
-      text,
-      image: imageUrl,
-    });
+const getMessages = async(req,resp) =>{
+    try {
+        const {id:userToChatId} = req.params
+        const myId = req.user._id;
 
-    await newMessage.save();
+        const message = await Message.find({
+            $or:[
+                {senderId:myId , receiverId:userToChatId},
+                {senderId:userToChatId , receiverId:myId}
+            ]
+        }) 
 
-    // Emit real-time message if receiver is online
-    const receiverSocketId = getReciverSocketId(receiverId);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("newMessage", newMessage);
+        resp.status(200).json(message);
+    } catch (error) {
+        resp.status(500).json({error: "Internal Server error"})
     }
+}
 
-    return res.status(200).json(newMessage);
-  } catch (error) {
-    return res.status(500).json({ error: "Internal Server Error: " + error.message });
-  }
-};
 
-module.exports = { getUserForSidebar, getMessages, sendMessage };
+const sendMessage = async(req,resp) =>{
+    try {
+        const {text , image} = req.body;
+        // console.log(req.body.image)
+        const {id : receiverId} = req.params;
+        const senderId = req.user._id;
+
+        let imageUrl;
+        if(image){
+            // console.log("Executing from message Controller")
+            const uploadResponse = await cloudinary.uploader.upload(image);
+            imageUrl = uploadResponse.secure_url;
+        }
+
+        const newMessage = new Message({
+            senderId,
+            receiverId,
+            text,
+            image:imageUrl,
+        })
+
+        await newMessage.save();
+
+        const receiverSocketId = getReciverSocketId(receiverId)
+        if(receiverSocketId){
+            io.to(receiverSocketId).emit("newMessage",newMessage);
+        }
+
+        resp.status(200).json(newMessage)
+
+    } catch (error) {
+        resp.status(500).json({error:"Internal Server Error"+error})
+    }
+}
+
+
+module.exports = {getUserForSidebar,getMessages,sendMessage};
+
+// timing :: 1:16:35
