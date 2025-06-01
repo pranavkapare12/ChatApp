@@ -7,6 +7,6 @@ const {getUserForSidebar,getMessages,sendMessage} = require('../controller/messa
 routes.get("/users",protectRoute,getUserForSidebar)
 routes.get("/:id",protectRoute,getMessages)
 
-// routes.post("/send/:id",protectRoute,sendMessage);
+routes.post("/send/:id",protectRoute,sendMessage);
 
 module.exports = routes;

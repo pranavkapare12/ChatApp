@@ -18,12 +18,12 @@ app.use(cors({
 
 
 app.use("/api/auth",route);
-// app.use("/api/messages",messageRoutes);
+app.use("/api/messages",messageRoutes);
 
 app.use(express.static(path.join(__dirname, "../frontend/dist")));
-app.get("*", (req,resp) =>{
-  resp.sendFile(path.join(__dirname, "../frontend","dist","index.html"))
-})
+// app.get("*", (req,resp) =>{
+//   resp.sendFile(path.join(__dirname, "../frontend","dist","index.html"))
+// })
 
 server.listen(3000, () => {
   console.log("The site is running on port 3000");
